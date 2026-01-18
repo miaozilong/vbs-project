@@ -1,0 +1,20 @@
+<job id="MainJob">
+  <script language="VBScript" src="Log.vbs"/>
+  <script language="VBScript">
+    Option Explicit
+	'LogInfo  "脚本开始运行"
+    'LogInfo  "这是一个普通信息"
+    'LogWarn  "发生警告了哦"
+    'LogError "出错了！文件没找到"
+    'LogDebug "调试细节：变量 x = 42"
+    '=============================== 开始写代码 ===============================
+    LogInfo "hello world 你好世界"
+    
+    
+    
+    
+    
+    
+    
+  </script>
+</job>
