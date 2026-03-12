@@ -1,0 +1,155 @@
+<job id="CheckWordDateStrictFirstPage_MultiFolders">
+  <script language="VBScript" src="Log.vbs"/>
+  <script language="VBScript">
+    Option Explicit
+
+    Dim fso, wordApp, wordDoc
+    Dim basePath, folderPath, file, files
+    Dim found, firstPageText, pageRange
+    Dim targetText : targetText = "2026年01月11日"
+
+    ' ─────────────── 这里列出所有要检查的目录 ───────────────
+    basePath = "D:\OneDrive\工作资料\软通动力\河南理工\2025\12月\软件工程实践3（大三）\软件工程实践3-提交资料\"
+
+    Dim foldersArray
+    foldersArray = Array( _
+        "软件2301\01-课程报告\", _
+        "软件2302\01-课程报告\", _
+        "软件2303\01-课程报告\", _
+        "软件2304\01-课程报告\", _
+        "软件2305\01-课程报告\", _
+        "软件2306\01-课程报告\" _
+    )
+
+    LogInfo "脚本开始运行 - 严格检查多个班级第一页日期"
+    LogInfo "目标文字  : " & targetText
+    LogInfo "基础路径  : " & basePath
+    LogInfo "要检查的班级文件夹数 : " & UBound(foldersArray) + 1
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+
+    On Error Resume Next
+    Set wordApp = CreateObject("Word.Application")
+    If Err.Number <> 0 Then
+      LogError "无法启动 Word，请检查是否安装"
+      WScript.Quit
+    End If
+    On Error Goto 0
+
+    wordApp.Visible       = False          ' 可改为 True 用于调试
+    wordApp.ScreenUpdating = False
+    wordApp.DisplayAlerts  = False
+
+    Dim totalFiles     : totalFiles     = 0
+    Dim totalMissing   : totalMissing   = 0
+    Dim classIndex
+
+    ' 遍历每个班级目录
+    For classIndex = 0 To UBound(foldersArray)
+        folderPath = basePath & foldersArray(classIndex)
+
+        If fso.FolderExists(folderPath) Then
+
+            LogInfo "─────────────── 开始检查班级: " & foldersArray(classIndex) & " ───────────────"
+
+            Set files = fso.GetFolder(folderPath).Files
+
+            Dim classFiles   : classFiles   = 0
+            Dim classMissing : classMissing = 0
+
+            For Each file In files
+              If LCase(fso.GetExtensionName(file.Name)) = "doc" Or _
+                 LCase(fso.GetExtensionName(file.Name)) = "docx" Then
+
+                classFiles = classFiles + 1
+                totalFiles = totalFiles + 1
+                found = False
+
+                On Error Resume Next
+                Set wordDoc = wordApp.Documents.Open(file.Path, False, True)
+                If Err.Number <> 0 Then
+                  LogWarn "打开失败: " & file.Name & " (" & Err.Description & ")"
+                  Err.Clear
+                  On Error Goto 0
+                Else
+                  On Error Goto 0
+
+                  ' ─── 严格获取第一页内容 ───
+                  On Error Resume Next
+                  wordApp.ActiveWindow.View.Type = 3   ' 3 = wdPrintView 页面视图
+                  If Err.Number <> 0 Then
+                    LogWarn "视图切换失败 (" & file.Name & "): " & Err.Description
+                    Err.Clear
+                  End If
+                  WScript.Sleep 400
+
+                  wordApp.Selection.HomeKey 1   ' 移到文档开头
+
+                  Set pageRange = wordDoc.Bookmarks("\Page").Range
+                  If Not pageRange Is Nothing Then
+                    firstPageText = pageRange.Text
+
+                    firstPageText = Replace(firstPageText, vbCr, " ")
+                    firstPageText = Replace(firstPageText, vbLf, " ")
+                    firstPageText = Replace(firstPageText, vbTab, " ")
+                    Do While InStr(firstPageText, "  ") > 0
+                      firstPageText = Replace(firstPageText, "  ", " ")
+                    Loop
+
+                    If InStr(1, firstPageText, targetText, vbTextCompare) > 0 Then
+                      found = True
+                    Else
+                      Dim cleanTarget : cleanTarget = Replace(Replace(targetText, " ", ""), "　", "")
+                      Dim cleanPage   : cleanPage   = Replace(Replace(firstPageText, " ", ""), "　", "")
+                      If InStr(1, cleanPage, cleanTarget, vbTextCompare) > 0 Then
+                        found = True
+                        LogDebug "去空格后匹配成功: " & file.Name
+                      End If
+                    End If
+                  Else
+                    LogWarn "无法获取第一页 (\Page 书签失败): " & file.Name
+                  End If
+                  On Error Goto 0
+
+                  If Not found Then
+                    classMissing = classMissing + 1
+                    totalMissing = totalMissing + 1
+                    LogInfo "第一页无日期 → " & foldersArray(classIndex) & file.Name
+                  End If
+
+                  wordDoc.Close False
+                End If
+              End If
+            Next
+
+            LogInfo "  该班级文件总数    : " & classFiles
+            LogInfo "  该班级缺日期文件数: " & classMissing
+            LogInfo "─────────────── 班级检查结束 ───────────────"
+
+        Else
+            LogError "文件夹不存在，跳过: " & folderPath
+        End If
+    Next
+
+    If Not wordApp Is Nothing Then wordApp.Quit False
+
+    Set pageRange = Nothing
+    Set wordDoc   = Nothing
+    Set wordApp   = Nothing
+    Set fso       = Nothing
+
+    LogInfo "══════════════════════════════════════════"
+    LogInfo "全部检查完成（严格第一页判断）"
+    LogInfo "总 Word 文件数       : " & totalFiles
+    LogInfo "总缺日期的文件数     : " & totalMissing
+    LogInfo "目标字符串          : " & targetText
+    LogInfo "══════════════════════════════════════════"
+
+    If totalMissing > 0 Then
+      LogWarn "共有 " & totalMissing & " 个文件第一页缺少日期，请逐一检查补齐"
+    Else
+      LogInfo "所有文件第一页均包含目标日期，很好！"
+    End If
+
+  </script>
+</job>
